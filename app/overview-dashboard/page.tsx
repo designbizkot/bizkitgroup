@@ -4,7 +4,7 @@ import { ProjectTimeline } from "@/components/overview/project-timeline"
 import { UpcomingEvents } from "@/components/overview/upcoming-events"
 import { FollowUpSection } from "@/components/overview/follow-up-section"
 
-export default function OverviewDashboard() {
+export function OverviewDashboard() {
   return (
     <div className="flex flex-col gap-5 xl:flex-row">
       {/* Left + Center columns */}
@@ -35,4 +35,8 @@ export default function OverviewDashboard() {
       </div>
     </div>
   )
+}
+
+export default function Page() {
+  return <OverviewDashboard />
 }
