@@ -1,0 +1,142 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Neue Rain";
+  src: url("/fonts/NeueRain-Thin.otf") format("opentype");
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Rain";
+  src: url("/fonts/NeueRain-Light.otf") format("opentype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Rain";
+  src: url("/fonts/NeueRain-Light-Italic.otf") format("opentype");
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Rain";
+  src: url("/fonts/NeueRain-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Rain";
+  src: url("/fonts/NeueRain-Medium.otf") format("opentype");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Rain";
+  src: url("/fonts/NeueRain-Medium-Italic.otf") format("opentype");
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Rain";
+  src: url("/fonts/NeueRain-SemiBold.otf") format("opentype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Rain";
+  src: url("/fonts/NeueRain-SemiBold-Italic.otf") format("opentype");
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Rain";
+  src: url("/fonts/NeueRain-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Neue Rain";
+  src: url("/fonts/NeueRain-Bold-Italic.otf") format("opentype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Editors Note";
+  src: url("/fonts/EditorsNote-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Editors Note";
+  src: url("/fonts/EditorsNote-Italic.otf") format("opentype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --font-neue-rain: "Neue Rain", sans-serif;
+    --font-editors-note: "Editors Note", serif;
+
+    --background: 192 8% 96%;
+    --foreground: 192 73% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 192 73% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 192 73% 10%;
+    --primary: 190 70% 29%;
+    --primary-foreground: 180 100% 99%;
+    --secondary: 192 28% 91%;
+    --secondary-foreground: 192 73% 10%;
+    --muted: 195 18% 94%;
+    --muted-foreground: 0 0% 46%;
+    --accent: 189 68% 44%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 90%;
+    --input: 192 28% 91%;
+    --ring: 190 70% 29%;
+    --radius: 0.5rem;
+
+    --sidebar: 192 73% 10%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-muted: 190 36% 24%;
+    --sidebar-accent: 190 70% 29%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-neue-rain);
+  }
+}
