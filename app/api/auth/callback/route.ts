@@ -76,8 +76,15 @@ export async function GET(req: Request) {
   )
 
   if (code) {
-    await supabase.auth.exchangeCodeForSession(code)
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+
+    if (error) {
+      return NextResponse.redirect(`${origin}/login`)
+    }
   }
 
-  return NextResponse.redirect(`${origin}/`)
+  const response = NextResponse.redirect(`${origin}/`)
+
+  return response
 }
+
