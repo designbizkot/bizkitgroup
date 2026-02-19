@@ -1,8 +1,8 @@
 import { Sidebar } from "@/components/sidebar"
 import { TopBar } from "@/components/top-bar"
-import { ClientsTable } from "@/components/clients-table"
+import SalesDashboard from "@/components/sales-dashboard"
 
-export default function ClientsPage() {
+export default function SalesPage() {
   return (
     <div className="flex h-screen overflow-hidden bg-background font-sans">
       <Sidebar />
@@ -11,7 +11,7 @@ export default function ClientsPage() {
         <TopBar />
 
         <main className="flex-1 overflow-y-auto p-3 sm:p-5">
-          <ClientsTable />
+          <SalesDashboard />
         </main>
       </div>
     </div>

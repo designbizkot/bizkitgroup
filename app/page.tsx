@@ -1,5 +1,5 @@
 import { Sidebar } from "@/components/sidebar"
-import { TopBar } from "@/components/overview/top-bar"
+import { TopBar } from "@/components/top-bar"
 import { OverviewDashboard } from "@/app/overview-dashboard/page"
 
 export default function Home() {

@@ -2,20 +2,35 @@ import { NextResponse } from "next/server"
 import { createServerSupabase } from "@/lib/supabase-server"
 
 export async function POST(request: Request) {
-  const supabase = await createServerSupabase()
-  const { email, password } = await request.json()
+  try {
+    const supabase = await createServerSupabase()
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
+    const { email, password } = await request.json()
 
-  if (error) {
+    if (!email || !password) {
+      return NextResponse.json(
+        { error: "Email and password are required" },
+        { status: 400 }
+      )
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (error) {
+      return NextResponse.json(
+        { error: error.message },
+        { status: 400 }
+      )
+    }
+
+    return NextResponse.json({ success: true })
+  } catch (err) {
     return NextResponse.json(
-      { error: error.message },
-      { status: 401 }
+      { error: "Something went wrong" },
+      { status: 500 }
     )
   }
-
-  return NextResponse.json({ success: true })
 }

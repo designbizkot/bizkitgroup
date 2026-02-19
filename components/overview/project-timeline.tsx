@@ -1,20 +1,24 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { ChevronLeft, ChevronRight, ChevronDown, SlidersHorizontal, Check } from "lucide-react"
+import {
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  SlidersHorizontal,
+  Check,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface TimelineProject {
   id: string
   name: string
   client: string
-  tag: string
-  tagColor: string
+  tag: "UX/UI" | "Website"
   progress: number
-  startDay: number
-  endDay: number
+  startDate: string
+  endDate: string
   avatar: string
-  done?: boolean
 }
 
 const PROJECTS: TimelineProject[] = [
@@ -23,10 +27,9 @@ const PROJECTS: TimelineProject[] = [
     name: "Dashboard: co...",
     client: "DashboardPro",
     tag: "UX/UI",
-    tagColor: "bg-[#166a7d]",
     progress: 40,
-    startDay: 3,
-    endDay: 8,
+    startDate: "2026-02-03",
+    endDate: "2026-02-08",
     avatar: "DP",
   },
   {
@@ -34,10 +37,9 @@ const PROJECTS: TimelineProject[] = [
     name: "Extension: show totals",
     client: "Extendify",
     tag: "Website",
-    tagColor: "bg-[#458897]",
     progress: 60,
-    startDay: 7,
-    endDay: 12,
+    startDate: "2026-02-07",
+    endDate: "2026-02-12",
     avatar: "EX",
   },
   {
@@ -45,69 +47,110 @@ const PROJECTS: TimelineProject[] = [
     name: "Help Docs: update scree...",
     client: "WebDocHub",
     tag: "Website",
-    tagColor: "bg-[#458897]",
     progress: 100,
-    startDay: 10,
-    endDay: 16,
+    startDate: "2026-02-10",
+    endDate: "2026-02-16",
     avatar: "WD",
-    done: true,
   },
   {
     id: "4",
     name: "Dashboard Internal Design",
     client: "Bizkit",
     tag: "UX/UI",
-    tagColor: "bg-[#166a7d]",
     progress: 40,
-    startDay: 14,
-    endDay: 20,
+    startDate: "2026-02-14",
+    endDate: "2026-02-20",
     avatar: "BZ",
   },
 ]
 
 export function ProjectTimeline() {
-  const [month, setMonth] = useState("Feb, 2026")
-  const today = 10
-  const totalDays = 22
+  const [currentDate, setCurrentDate] = useState(new Date())
 
-  const days = useMemo(() => Array.from({ length: totalDays }, (_, i) => i + 1), [])
+  const year = currentDate.getFullYear()
+  const monthIndex = currentDate.getMonth()
+
+  const todayDate = new Date()
+  const isCurrentMonth =
+    todayDate.getFullYear() === year &&
+    todayDate.getMonth() === monthIndex
+
+  const today = isCurrentMonth ? todayDate.getDate() : null
+
+  const totalDays = new Date(year, monthIndex + 1, 0).getDate()
+
+  const days = useMemo(
+    () => Array.from({ length: totalDays }, (_, i) => i + 1),
+    [totalDays]
+  )
+
+  const monthLabel = currentDate.toLocaleString("en-US", {
+    month: "short",
+    year: "numeric",
+  })
+
+  const goPrevMonth = () => {
+    setCurrentDate(new Date(year, monthIndex - 1, 1))
+  }
+
+  const goNextMonth = () => {
+    setCurrentDate(new Date(year, monthIndex + 1, 1))
+  }
 
   return (
-    <section className="rounded-xl bg-card p-4 sm:p-5">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 className="text-lg font-semibold text-card-foreground">
+    <section className="flex h-full flex-col rounded-xl bg-white p-6 shadow-sm border border-gray-200">      {/* Header */}
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-gray-800">
           Project timeline
         </h2>
+
         <div className="flex items-center gap-2">
-          <button className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted">
-            {month}
-            <ChevronDown size={14} />
+          <button
+            onClick={goPrevMonth}
+            className="rounded-md border px-2 py-1 hover:bg-gray-100"
+          >
+            <ChevronLeft size={16} />
           </button>
-          <button className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted">
+
+          <div className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm font-medium">
+            {monthLabel}
+            <ChevronDown size={14} />
+          </div>
+
+          <button
+            onClick={goNextMonth}
+            className="rounded-md border px-2 py-1 hover:bg-gray-100"
+          >
+            <ChevronRight size={16} />
+          </button>
+
+          <button className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-sm hover:bg-gray-100">
             Filter
             <SlidersHorizontal size={14} />
           </button>
         </div>
       </div>
 
-      {/* Gantt chart */}
-      <div className="mt-4 overflow-x-auto">
-        <div style={{ minWidth: `${totalDays * 44}px` }}>
-          {/* Day numbers row */}
-          <div className="flex border-b border-border pb-2">
+      {/* Timeline */}
+      <div className="mt-6 flex-1 overflow-auto">
+        <div
+          className="relative overflow-hidden rounded-lg border border-gray-200 bg-white"
+          style={{ minWidth: `${totalDays * 44}px` }}
+        >
+          {/* Day header */}
+          <div className="flex border-b border-gray-200 bg-white py-2">
             {days.map((d) => (
               <div
                 key={d}
-                className="flex shrink-0 items-center justify-center"
+                className="flex shrink-0 items-center justify-center text-xs"
                 style={{ width: `${100 / totalDays}%` }}
               >
-                {d === today ? (
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+                {today === d ? (
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1F6F78] text-white font-bold">
                     {String(d).padStart(2, "0")}
                   </span>
                 ) : (
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className="text-gray-500">
                     {String(d).padStart(2, "0")}
                   </span>
                 )}
@@ -115,70 +158,102 @@ export function ProjectTimeline() {
             ))}
           </div>
 
-          {/* Today vertical line */}
+          {/* Body */}
           <div className="relative">
-            <div
-              className="absolute top-0 bottom-0 z-0 w-px bg-primary/20"
-              style={{
-                left: `${((today - 0.5) / totalDays) * 100}%`,
-              }}
-            />
+            {/* Vertical grid */}
+            <div className="absolute inset-0 z-0 flex">
+              {days.map((_, i) => (
+                <div
+                  key={i}
+                  className="h-full border-r border-gray-200"
+                  style={{ width: `${100 / totalDays}%` }}
+                />
+              ))}
+            </div>
 
-            {/* Project rows */}
-            <div className="relative z-10 flex flex-col gap-3 py-4">
+            {/* Today line */}
+            {today && (
+              <div
+                className="absolute top-0 bottom-0 z-10 w-px bg-[#1F6F78]/30"
+                style={{
+                  left: `${((today - 0.5) / totalDays) * 100}%`,
+                }}
+              />
+            )}
+
+            {/* Projects */}
+            <div className="relative z-20 flex flex-col gap-4 py-6 px-2">
               {PROJECTS.map((project) => {
-                const leftPct = ((project.startDay - 1) / totalDays) * 100
-                const widthPct = ((project.endDay - project.startDay + 1) / totalDays) * 100
+                const start = new Date(project.startDate)
+                const end = new Date(project.endDate)
+
+                if (
+                  start.getFullYear() !== year ||
+                  start.getMonth() !== monthIndex
+                )
+                  return null
+
+                const startDay = start.getDate()
+                const endDay = end.getDate()
+
+                const safeStartDay = Math.max(startDay, 1)
+                const safeEndDay = Math.min(endDay, totalDays)
+
+                const leftPct =
+                  ((safeStartDay - 1) / totalDays) * 100
+
+                const widthPct =
+                  ((safeEndDay - safeStartDay + 1) /
+                    totalDays) *
+                  100
 
                 return (
-                  <div key={project.id} className="relative h-14">
+                  <div key={project.id} className="relative h-20">
                     <div
                       className={cn(
-                        "absolute flex h-14 items-center gap-2 rounded-xl px-3",
+                        "absolute flex items-center rounded-2xl px-3 shadow-sm",
                         project.tag === "UX/UI"
-                          ? "bg-[#0f3d47]"
-                          : "bg-[#2a7a8a]"
+                          ? "bg-[#D4E4DC]"
+                          : "bg-[#B1CBD0]"
                       )}
                       style={{
                         left: `${leftPct}%`,
                         width: `${widthPct}%`,
+                        height: "72px",
                       }}
                     >
                       {/* Avatar */}
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-sidebar text-[9px] font-bold text-sidebar-foreground ring-2 ring-white/20">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-xs font-bold text-gray-700">
                         {project.avatar}
-                      </span>
-
-                      {/* Info */}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-xs font-semibold text-white">
-                            {project.name}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <p className="truncate text-[10px] text-white/70">
-                            {project.client}
-                          </p>
-                          <span className={cn(
-                            "shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold text-white",
-                            project.tagColor
-                          )}>
-                            {project.tag}
-                          </span>
-                        </div>
                       </div>
 
-                      {/* Progress / Done */}
-                      {project.done ? (
-                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/20 text-white">
-                          <Check size={12} strokeWidth={3} />
+                      {/* Content */}
+                      <div className="ml-3 flex flex-1 flex-col justify-center">
+                        <p className="truncate text-sm font-semibold text-gray-800 leading-tight">
+                          {project.name}
+                        </p>
+
+                        <p className="text-xs text-gray-700 leading-tight mt-[2px]">
+                          {project.client}
+                        </p>
+
+                        <span className="mt-1 inline-block w-fit rounded-md bg-[#1F6F78] px-2 py-[2px] text-[10px] font-semibold text-white">
+                          {project.tag}
                         </span>
-                      ) : (
-                        <span className="shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-bold text-white">
-                          {project.progress}%
-                        </span>
-                      )}
+                      </div>
+
+                      {/* Progress (ตรงกลางแนวตั้งแน่นอน) */}
+                      <div className="ml-3 flex h-full items-center">
+                        {project.progress === 100 ? (
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#1F6F78] text-white">
+                            <Check size={12} strokeWidth={3} />
+                          </div>
+                        ) : (
+                          <div className="flex h-7 items-center rounded-full bg-[#1F6F78] px-3 text-sm font-semibold text-white">
+                            {project.progress}%
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )

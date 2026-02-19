@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { createServerSupabase } from "@/lib/supabase-server"
 
 interface GoogleCalendarEvent {
   id: string
@@ -14,11 +15,26 @@ export async function GET() {
   const apiKey = process.env.GOOGLE_CALENDAR_API_KEY
   const calendarId = process.env.GOOGLE_CALENDAR_ID || "primary"
 
-  // If no API key is configured, return demo events
-  if (!apiKey) {
+  let userAccessToken: string | null = null
+
+  try {
+    const supabase = await createServerSupabase()
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+
+    const s: any = session
+    userAccessToken = s?.provider_token || s?.provider_access_token || null
+  } catch (e) {
+    console.warn("Supabase session check failed", e)
+  }
+
+  // ❌ No API key and no OAuth token
+  if (!apiKey && !userAccessToken) {
     return NextResponse.json({
       synced: false,
-      events: getDemoEvents(),
+      events: [],
+      connectUrl: "/api/auth/google",
     })
   }
 
@@ -29,39 +45,58 @@ export async function GET() {
     maxDate.setDate(maxDate.getDate() + 30)
     const timeMax = maxDate.toISOString()
 
-    const url = new URL(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`
-    )
-    url.searchParams.set("key", apiKey)
+    const baseUrl = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
+      calendarId
+    )}/events`
+
+    const url = new URL(baseUrl)
     url.searchParams.set("timeMin", timeMin)
     url.searchParams.set("timeMax", timeMax)
     url.searchParams.set("singleEvents", "true")
     url.searchParams.set("orderBy", "startTime")
     url.searchParams.set("maxResults", "10")
 
-    const res = await fetch(url.toString(), {
-      next: { revalidate: 300 }, // cache for 5 minutes
-    })
+    const fetchOpts: RequestInit = {
+      next: { revalidate: 300 } as any,
+    }
+
+    if (userAccessToken) {
+      ;(fetchOpts as any).headers = {
+        Authorization: `Bearer ${userAccessToken}`,
+      }
+    } else if (apiKey) {
+      url.searchParams.set("key", apiKey)
+    }
+
+    const res = await fetch(url.toString(), fetchOpts)
 
     if (!res.ok) {
-      console.error("Google Calendar API error:", res.status, await res.text())
+      console.error("Google Calendar API error:", res.status)
       return NextResponse.json({
         synced: false,
-        events: getDemoEvents(),
-        error: "Failed to fetch calendar events",
+        events: [],
+        connectUrl: "/api/auth/google",
       })
     }
 
     const data = await res.json()
+
     const events = (data.items || []).map((item: GoogleCalendarEvent) => {
       const startStr = item.start.dateTime || item.start.date || ""
       const endStr = item.end.dateTime || item.end.date || ""
       const startDate = new Date(startStr)
       const endDate = new Date(endStr)
 
-      const dayOfWeek = startDate.toLocaleDateString("en-US", { weekday: "short" })
+      const dayOfWeek = startDate.toLocaleDateString("en-US", {
+        weekday: "short",
+      })
+
       const day = String(startDate.getDate()).padStart(2, "0")
-      const month = startDate.toLocaleDateString("en-US", { month: "short" })
+
+      const month = startDate.toLocaleDateString("en-US", {
+        month: "short",
+      })
+
       const year = String(startDate.getFullYear())
 
       let time = "All Day"
@@ -79,9 +114,9 @@ export async function GET() {
         time = `${startTime} - ${endTime}`
       }
 
-      // Determine tag from description or default
       let tag = "Event"
       const desc = (item.description || "").toLowerCase()
+
       if (desc.includes("social")) tag = "Social"
       else if (desc.includes("meeting")) tag = "Meeting"
       else if (desc.includes("deadline")) tag = "Deadline"
@@ -100,30 +135,17 @@ export async function GET() {
     })
 
     return NextResponse.json({
-      synced: true,
+      synced: !!userAccessToken,
       events,
+      connectUrl: !userAccessToken ? "/api/auth/google" : null,
     })
   } catch (error) {
     console.error("Calendar fetch error:", error)
+
     return NextResponse.json({
       synced: false,
-      events: getDemoEvents(),
-      error: "Failed to connect to Google Calendar",
+      events: [],
+      connectUrl: "/api/auth/google",
     })
   }
-}
-
-function getDemoEvents() {
-  return [
-    {
-      id: "demo-1",
-      dayOfWeek: "Wed",
-      day: "04",
-      month: "Feb",
-      year: "2026",
-      time: "4:00 PM - 6:00 PM",
-      title: "Bizkit Introduction Event",
-      tag: "Social",
-    },
-  ]
 }

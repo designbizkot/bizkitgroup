@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import {
   Search,
   SlidersHorizontal,
@@ -18,9 +18,11 @@ import {
   MapPin,
   CreditCard,
   Globe,
+  MoreVertical,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Modal } from "@/components/modal"
+import { supabase } from "@/lib/supabase-client"
 
 interface Client {
   id: string
@@ -71,32 +73,6 @@ const INDUSTRY_OPTIONS = [
 
 const SOURCE_OPTIONS = ["LinkedIn", "Website", "Referral"]
 
-const initialClients: Client[] = [
-  {
-    id: "1",
-    name: "Olivia Rhye",
-    email: "olivia@untitledui.com",
-    avatar: "/placeholder.svg?height=40&width=40&query=professional woman face portrait",
-    online: true,
-    company: "EdgeTech Solutions Inc.",
-    companyLogo: "E",
-    companyLogoColor: "bg-[#166a7d]",
-    companyWebsite: "https://edgetech.com.au",
-    industry: "Technology",
-    industryColor: INDUSTRY_COLORS.Technology,
-    source: "LinkedIn",
-    sourceColor: SOURCE_COLORS.LinkedIn,
-    city: "Sydney",
-    country: "Australia",
-    linkedin: "https://linkedin.com/in/oliviarhye",
-    phone: "+61 2 9000 0000",
-    active: true,
-    billingName: "Olivia Rhye",
-    billingEmail: "billing@edgetech.com",
-    billingAbn: "51 824 753 556",
-  },
-]
-
 const ITEMS_PER_PAGE = 9
 
 /* ---- Form field types ---- */
@@ -118,12 +94,12 @@ interface FormSetters {
 }
 
 export function ClientsTable() {
-  const [clients, setClients] = useState<Client[]>(initialClients)
-  const [search, setSearch] = useState("")
+  const [clients, setClients] = useState<Client[]>([])
   const [activeTab, setActiveTab] = useState<"active" | "inactive">("active")
   const [currentPage, setCurrentPage] = useState(1)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [viewingClient, setViewingClient] = useState<Client | null>(null)
+  const [originalClient, setOriginalClient] = useState<Client | null>(null)
 
   /* ---- Add modal state ---- */
   const [isAdding, setIsAdding] = useState(false)
@@ -140,6 +116,17 @@ export function ClientsTable() {
   const [newBillingName, setNewBillingName] = useState("")
   const [newBillingEmail, setNewBillingEmail] = useState("")
   const [newBillingAbn, setNewBillingAbn] = useState("")
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+
+  /* ---- Filter state ---- */
+  const [isFilterOpen, setIsFilterOpen] = useState(false)
+
+  const [filterIndustry, setFilterIndustry] = useState<string>("")
+  const [filterSource, setFilterSource] = useState<string>("")
+  const [filterCountry, setFilterCountry] = useState<string>("")
+  const [filterStatus, setFilterStatus] = useState<"all" | "active" | "inactive">("all")
+
+
 
   /* ---- Edit modal state ---- */
   const [editingClient, setEditingClient] = useState<Client | null>(null)
@@ -156,21 +143,84 @@ export function ClientsTable() {
   const [editBillingName, setEditBillingName] = useState("")
   const [editBillingEmail, setEditBillingEmail] = useState("")
   const [editBillingAbn, setEditBillingAbn] = useState("")
+  const [search, setSearch] = useState("")
 
   const [deletingClient, setDeletingClient] = useState<Client | null>(null)
+
+  useEffect(() => {
+    const fetchClients = async () => {
+      const { data, error } = await supabase
+        .from("clients")
+        .select("*")
+        .order("created_at", { ascending: false })
+
+      if (!error && data) {
+        const formatted = data.map((c) => ({
+          ...c,
+          companyWebsite: c.company_website,
+          billingName: c.billing_name,
+          billingEmail: c.billing_email,
+          billingAbn: c.billing_abn,
+          industryColor: INDUSTRY_COLORS[c.industry] ?? "",
+          sourceColor: SOURCE_COLORS[c.source] ?? "",
+          companyLogo: c.company?.charAt(0)?.toUpperCase() ?? "C",
+          companyLogoColor: "bg-[#166a7d]",
+          avatar: "/placeholder.svg",
+          online: false,
+        }))
+
+        setClients(formatted)
+      }
+    }
+
+    fetchClients()
+  }, [])
 
   /* ---- Filtering / pagination ---- */
   const filtered = useMemo(() => {
     return clients.filter((c) => {
       const matchesTab = activeTab === "active" ? c.active : !c.active
+
       const matchesSearch =
         !search ||
         c.name.toLowerCase().includes(search.toLowerCase()) ||
         c.company.toLowerCase().includes(search.toLowerCase()) ||
         c.email.toLowerCase().includes(search.toLowerCase())
-      return matchesTab && matchesSearch
+
+      const matchesIndustry =
+        !filterIndustry || c.industry === filterIndustry
+
+      const matchesSource =
+        !filterSource || c.source === filterSource
+
+      const matchesCountry =
+        !filterCountry ||
+        c.country.toLowerCase().includes(filterCountry.toLowerCase())
+
+      const matchesStatus =
+        filterStatus === "all" ||
+        (filterStatus === "active" && c.active) ||
+        (filterStatus === "inactive" && !c.active)
+
+      return (
+        matchesTab &&
+        matchesSearch &&
+        matchesIndustry &&
+        matchesSource &&
+        matchesCountry &&
+        matchesStatus
+      )
     })
-  }, [clients, activeTab, search])
+  }, [
+    clients,
+    activeTab,
+    search,
+    filterIndustry,
+    filterSource,
+    filterCountry,
+    filterStatus,
+  ])
+
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE))
   const paginated = filtered.slice(
@@ -204,40 +254,59 @@ export function ClientsTable() {
     setIsAdding(false)
   }
 
-  const handleAddClient = () => {
+  const handleAddClient = async () => {
     if (!newName.trim() || !newEmail.trim()) return
-    const c: Client = {
-      id: Date.now().toString(),
-      name: newName.trim(),
-      email: newEmail.trim(),
-      avatar: `/placeholder.svg?height=40&width=40&query=${encodeURIComponent(newName.trim())} portrait`,
-      online: true,
-      company: newCompany.trim() || "Unknown",
-      companyLogo: (newCompany.trim() || "U").charAt(0).toUpperCase(),
-      companyLogoColor: "bg-[#166a7d]",
-      companyWebsite: newCompanyWebsite.trim(),
-      industry: newIndustry,
-      industryColor: INDUSTRY_COLORS[newIndustry],
-      source: newSource,
-      sourceColor: SOURCE_COLORS[newSource],
-      city: newCity.trim(),
-      country: newCountry.trim(),
-      linkedin: newLinkedin.trim() || "#",
-      phone: newPhone.trim(),
-      active: true,
-      billingName: newBillingName.trim(),
-      billingEmail: newBillingEmail.trim(),
-      billingAbn: newBillingAbn.trim(),
+
+    const { data, error } = await supabase
+      .from("clients")
+      .insert([
+        {
+          name: newName.trim(),
+          email: newEmail.trim(),
+          company: newCompany,
+          company_website: newCompanyWebsite,
+          industry: newIndustry,
+          source: newSource,
+          city: newCity,
+          country: newCountry,
+          phone: newPhone,
+          linkedin: newLinkedin,
+          billing_name: newBillingName,
+          billing_email: newBillingEmail,
+          billing_abn: newBillingAbn,
+          active: true,
+        },
+      ])
+      .select()
+      .single()
+
+    if (error) {
+      console.error(error)
+      return
     }
-    setClients((prev) => [c, ...prev])
-    setCurrentPage(1)
-    setActiveTab("active")
+
+    const formatted = {
+      ...data,
+      companyWebsite: data.company_website,
+      billingName: data.billing_name,
+      billingEmail: data.billing_email,
+      billingAbn: data.billing_abn,
+      industryColor: INDUSTRY_COLORS[data.industry] ?? "",
+      sourceColor: SOURCE_COLORS[data.source] ?? "",
+      companyLogo: data.company?.charAt(0)?.toUpperCase() ?? "C",
+      companyLogoColor: "bg-[#166a7d]",
+      avatar: "/placeholder.svg",
+      online: false,
+    }
+
+    setClients((prev) => [formatted, ...prev])
     resetAddForm()
   }
 
   /* ---- Edit ---- */
   const openEditModal = (client: Client) => {
     setEditingClient(client)
+    setOriginalClient(client)
     setEditName(client.name); setEditEmail(client.email)
     setEditCompany(client.company); setEditCompanyWebsite(client.companyWebsite)
     setEditIndustry(client.industry); setEditSource(client.source)
@@ -247,51 +316,82 @@ export function ClientsTable() {
     setEditBillingAbn(client.billingAbn)
   }
 
-  const resetEditForm = () => setEditingClient(null)
+  const resetEditForm = () => {
+    setEditingClient(null)
+    setOriginalClient(null)
+  }
 
-  const handleEditClient = () => {
-    if (!editingClient || !editName.trim() || !editEmail.trim()) return
+  const handleEditClient = async () => {
+    if (!editingClient) return
+
+    const { data, error } = await supabase
+      .from("clients")
+      .update({
+        name: editName,
+        email: editEmail,
+        company: editCompany,
+        company_website: editCompanyWebsite,
+        industry: editIndustry,
+        source: editSource,
+        city: editCity,
+        country: editCountry,
+        phone: editPhone,
+        linkedin: editLinkedin,
+        billing_name: editBillingName,
+        billing_email: editBillingEmail,
+        billing_abn: editBillingAbn,
+      })
+      .eq("id", editingClient.id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error(error)
+      return
+    }
+
+    const formatted = {
+      ...data,
+      companyWebsite: data.company_website,
+      billingName: data.billing_name,
+      billingEmail: data.billing_email,
+      billingAbn: data.billing_abn,
+      industryColor: INDUSTRY_COLORS[data.industry] ?? "",
+      sourceColor: SOURCE_COLORS[data.source] ?? "",
+      companyLogo: data.company?.charAt(0)?.toUpperCase() ?? "C",
+      companyLogoColor: "bg-[#166a7d]",
+      avatar: "/placeholder.svg",
+      online: false,
+    }
+
     setClients((prev) =>
-      prev.map((c) =>
-        c.id === editingClient.id
-          ? {
-              ...c,
-              name: editName.trim(),
-              email: editEmail.trim(),
-              company: editCompany.trim() || "Unknown",
-              companyLogo: (editCompany.trim() || "U").charAt(0).toUpperCase(),
-              companyWebsite: editCompanyWebsite.trim(),
-              industry: editIndustry,
-              industryColor: INDUSTRY_COLORS[editIndustry],
-              source: editSource,
-              sourceColor: SOURCE_COLORS[editSource],
-              city: editCity.trim(),
-              country: editCountry.trim(),
-              linkedin: editLinkedin.trim() || "#",
-              phone: editPhone.trim(),
-              billingName: editBillingName.trim(),
-              billingEmail: editBillingEmail.trim(),
-              billingAbn: editBillingAbn.trim(),
-            }
-          : c,
-      ),
+      prev.map((c) => (c.id === data.id ? formatted : c))
     )
+
     resetEditForm()
   }
 
   /* ---- Delete ---- */
-  const handleDeleteClient = () => {
+  const handleDeleteClient = async () => {
     if (!deletingClient) return
-    setClients((prev) => prev.filter((c) => c.id !== deletingClient.id))
-    setSelected((prev) => {
-      const next = new Set(prev)
-      next.delete(deletingClient.id)
-      return next
-    })
-    setDeletingClient(null)
-    if (viewingClient?.id === deletingClient.id) setViewingClient(null)
-  }
 
+    const { error } = await supabase
+      .from("clients")
+      .delete()
+      .eq("id", deletingClient.id)
+
+    if (error) {
+      console.error(error)
+      return
+    }
+
+    setClients((prev) =>
+      prev.filter((c) => c.id !== deletingClient.id)
+    )
+
+    setDeletingClient(null)
+    setViewingClient(null)
+  }
   /* ---- Pagination ---- */
   const renderPageNumbers = () => {
     const pages: (number | string)[] = []
@@ -310,6 +410,13 @@ export function ClientsTable() {
     }
     return unique
   }
+
+  useEffect(() => {
+    const handleClick = () => setOpenMenuId(null)
+    window.addEventListener("click", handleClick)
+    return () =>
+      window.removeEventListener("click", handleClick)
+  }, [])
 
   /* ---- Input helpers ---- */
   const inputCls =
@@ -445,6 +552,37 @@ export function ClientsTable() {
     setIndustry: setEditIndustry, setSource: setEditSource, setCity: setEditCity, setCountry: setEditCountry,
     setPhone: setEditPhone, setLinkedin: setEditLinkedin,
     setBillingName: setEditBillingName, setBillingEmail: setEditBillingEmail, setBillingAbn: setEditBillingAbn,
+  }
+  const isChanged = editingClient && originalClient && (
+    editName !== originalClient.name ||
+    editEmail !== originalClient.email ||
+    editCompany !== originalClient.company ||
+    editCompanyWebsite !== originalClient.companyWebsite ||
+    editIndustry !== originalClient.industry ||
+    editSource !== originalClient.source ||
+    editCity !== originalClient.city ||
+    editCountry !== originalClient.country ||
+    editPhone !== originalClient.phone ||
+    editLinkedin !== originalClient.linkedin ||
+    editBillingName !== originalClient.billingName ||
+    editBillingEmail !== originalClient.billingEmail ||
+    editBillingAbn !== originalClient.billingAbn
+  )
+
+  const currentClientData = {
+    name: editName,
+    email: editEmail,
+    company: editCompany,
+    companyWebsite: editCompanyWebsite,
+    industry: editIndustry,
+    source: editSource,
+    city: editCity,
+    country: editCountry,
+    phone: editPhone,
+    linkedin: editLinkedin,
+    billingName: editBillingName,
+    billingEmail: editBillingEmail,
+    billingAbn: editBillingAbn,
   }
 
   /* =============== CLIENT DETAIL VIEW =============== */
@@ -608,7 +746,11 @@ export function ClientsTable() {
                 const updated = clients.find((c) => c.id === editingClient?.id)
                 if (updated) setViewingClient(updated)
               }}
-              disabled={!editName.trim() || !editEmail.trim()}
+              disabled={
+                !editName.trim() ||
+                !editEmail.trim() ||
+                !isChanged
+              }
               className="flex-1 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-[#D0E1E5] disabled:text-white disabled:opacity-100"
             >Save Changes</button>
           </div>
@@ -666,10 +808,14 @@ export function ClientsTable() {
                 </button>
               )}
             </div>
-            <button className="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted">
+            <button
+              onClick={() => setIsFilterOpen(true)}
+              className="flex items-center gap-2 rounded-lg border border-primary px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
+            >
               <SlidersHorizontal size={16} />
               <span className="hidden sm:inline">Filters</span>
             </button>
+
             <button onClick={() => setIsAdding(true)} className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90">
               <Plus size={16} />
               <span className="hidden sm:inline">Add Client</span>
@@ -678,20 +824,20 @@ export function ClientsTable() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
+        <div>
           <table className="w-full">
             <thead>
               <tr className="border-b border-border">
                 <th className="w-10 py-3 pl-5 pr-2 text-left">
                   <input type="checkbox" checked={paginated.length > 0 && selected.size === paginated.length} onChange={toggleAll} className="h-4 w-4 rounded border-border accent-primary" />
                 </th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Name</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Company</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Industry</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Source</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Location</th>
-                <th className="px-3 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground">Contact</th>
-                <th className="px-3 py-3 pr-5 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground">Actions</th>
+                <th className="px-3 py-3 text-left text-xs font-medium tracking-wider text-muted-foreground">Name</th>
+                <th className="px-3 py-3 text-left text-xs font-medium tracking-wider text-muted-foreground">Company</th>
+                <th className="px-3 py-3 text-left text-xs font-medium tracking-wider text-muted-foreground">Industry</th>
+                <th className="px-3 py-3 text-left text-xs font-medium tracking-wider text-muted-foreground">Source</th>
+                <th className="px-3 py-3 text-left text-xs font-medium tracking-wider text-muted-foreground">Location</th>
+                <th className="px-3 py-3 text-left text-xs font-medium tracking-wider text-muted-foreground">Contact</th>
+
               </tr>
             </thead>
             <tbody>
@@ -746,16 +892,48 @@ export function ClientsTable() {
                       </a>
                     </div>
                   </td>
-                  <td className="px-3 py-4 pr-5" onClick={(e) => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1">
-                      <button onClick={() => openEditModal(client)} className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[#e8f0f2] hover:text-primary" aria-label={`Edit ${client.name}`}>
-                        <Pencil size={15} />
+                  <td
+                    className="px-3 py-4 pr-5"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="relative flex justify-end">
+                      <button
+                        onClick={() =>
+                          setOpenMenuId(
+                            openMenuId === client.id ? null : client.id
+                          )
+                        }
+                        className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted"
+                      >
+                        <MoreVertical size={16} />
                       </button>
-                      <button onClick={() => setDeletingClient(client)} className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-50 hover:text-red-600" aria-label={`Delete ${client.name}`}>
-                        <Trash2 size={15} />
-                      </button>
+
+                      {openMenuId === client.id && (
+                        <div className="absolute right-0 mt-9 w-32 rounded-md border border-border bg-card shadow-lg z-50">
+                          <button
+                            onClick={() => {
+                              openEditModal(client)
+                              setOpenMenuId(null)
+                            }}
+                            className="block w-full px-4 py-2 text-left text-sm hover:bg-muted"
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              setDeletingClient(client)
+                              setOpenMenuId(null)
+                            }}
+                            className="block w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </td>
+
                 </tr>
               ))}
               {paginated.length === 0 && (
@@ -789,6 +967,98 @@ export function ClientsTable() {
         )}
       </div>
 
+      <Modal
+        open={isFilterOpen}
+        onClose={() => setIsFilterOpen(false)}
+        title="Filters"
+      >
+        <div className="flex flex-col gap-4">
+
+          {/* Industry */}
+          <div>
+            <label className={labelCls}>Industry</label>
+            <select
+              value={filterIndustry}
+              onChange={(e) => setFilterIndustry(e.target.value)}
+              className={selectCls}
+            >
+              <option value="">All</option>
+              {INDUSTRY_OPTIONS.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Source */}
+          <div>
+            <label className={labelCls}>Source</label>
+            <select
+              value={filterSource}
+              onChange={(e) => setFilterSource(e.target.value)}
+              className={selectCls}
+            >
+              <option value="">All</option>
+              {SOURCE_OPTIONS.map((o) => (
+                <option key={o} value={o}>{o}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Country */}
+          <div>
+            <label className={labelCls}>Country</label>
+            <input
+              type="text"
+              value={filterCountry}
+              onChange={(e) => setFilterCountry(e.target.value)}
+              placeholder="e.g. Australia"
+              className={inputCls}
+            />
+          </div>
+
+          {/* Status */}
+          <div>
+            <label className={labelCls}>Status</label>
+            <select
+              value={filterStatus}
+              onChange={(e) =>
+                setFilterStatus(e.target.value as "all" | "active" | "inactive")
+              }
+              className={selectCls}
+            >
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </select>
+          </div>
+
+          <div className="flex gap-3 pt-3">
+            <button
+              onClick={() => {
+                setFilterIndustry("")
+                setFilterSource("")
+                setFilterCountry("")
+                setFilterStatus("all")
+              }}
+              className="flex-1 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium hover:bg-muted"
+            >
+              Reset
+            </button>
+
+            <button
+              onClick={() => {
+                setIsFilterOpen(false)
+                setCurrentPage(1)
+              }}
+              className="flex-1 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+
       {/* Add Client Modal */}
       <Modal open={isAdding} onClose={resetAddForm} title="New Client" size="lg">
         {renderFormFields(addValues, addSetters)}
@@ -803,7 +1073,17 @@ export function ClientsTable() {
         {editingClient && renderFormFields(editValues, editSetters)}
         <div className="flex items-center gap-3 pt-4">
           <button onClick={resetEditForm} className="flex-1 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted">Cancel</button>
-          <button onClick={handleEditClient} disabled={!editName.trim() || !editEmail.trim()} className="flex-1 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-[#D0E1E5] disabled:text-white disabled:opacity-100">Save Changes</button>
+          <button
+            onClick={handleEditClient}
+            disabled={
+              !editName.trim() ||
+              !editEmail.trim() ||
+              !isChanged
+            }
+            className="flex-1 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-[#D0E1E5] disabled:text-white disabled:opacity-100"
+          >
+            Save Changes
+          </button>
         </div>
       </Modal>
 

@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server"
 import { createServerSupabase } from "@/lib/supabase-server"
 
-export async function POST() {
+export async function GET() {
   const supabase = await createServerSupabase()
-  await supabase.auth.signOut()
-  return NextResponse.json({ success: true })
-}
 
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+
+  return NextResponse.json({ user })
+}

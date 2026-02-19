@@ -34,11 +34,16 @@ export default function LoginPage() {
         return
       }
 
-      router.replace("/")
+      window.location.href = "/"
     } catch {
       setError("Something went wrong. Please try again.")
       setLoading(false)
     }
+  }
+
+  // ✅ เพิ่มแค่นี้
+  const handleGoogleLogin = () => {
+    window.location.href = "/api/auth/google"
   }
 
   return (
@@ -92,7 +97,7 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="admin@bizkitgroup.com"
+                placeholder="Enter your Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="rounded-lg border border-[#d6d6d6] bg-white px-3.5 py-2.5 text-sm text-[#092a32] placeholder:text-[#a3a3a3] focus:border-[#166a7d] focus:outline-none focus:ring-1 focus:ring-[#166a7d]"
@@ -168,6 +173,40 @@ export default function LoginPage() {
               className="mt-2 rounded-lg bg-[#166a7d] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#12596a] disabled:cursor-not-allowed disabled:bg-[#D0E1E5] disabled:text-white disabled:opacity-100"
             >
               {loading ? "Signing in..." : "Sign In"}
+            </button>
+
+            {/* Divider */}
+            <div className="relative my-2">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-[#e5e5e5]" />
+              </div>
+              <div className="relative flex justify-center text-xs">
+                <span className="bg-white px-2 text-[#a3a3a3]">
+                  OR
+                </span>
+              </div>
+            </div>
+
+            {/* Google Button */}
+            <button
+              type="button"
+              onClick={handleGoogleLogin}
+              disabled={loading}
+              className="rounded-lg border border-[#d6d6d6] bg-white px-4 py-2.5 text-sm font-medium text-[#092a32] transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 flex items-center justify-center gap-2"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 48 48"
+                width="18"
+                height="18"
+              >
+                <path fill="#EA4335" d="M24 9.5c3.4 0 6.3 1.2 8.6 3.2l6.4-6.4C34.9 2.3 29.8 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.7 6C12.1 13.6 17.5 9.5 24 9.5z" />
+                <path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.5c-.5 2.7-2 5-4.3 6.5l6.7 5.2c3.9-3.6 6.2-8.9 6.2-16.2z" />
+                <path fill="#FBBC05" d="M10.4 28.3c-1-2.7-1-5.6 0-8.3l-7.7-6C.9 17.2 0 20.5 0 24s.9 6.8 2.7 10l7.7-5.7z" />
+                <path fill="#34A853" d="M24 48c5.8 0 10.7-1.9 14.2-5.2l-6.7-5.2c-1.9 1.3-4.4 2.1-7.5 2.1-6.5 0-11.9-4.1-13.6-9.8l-7.7 6C6.6 42.6 14.6 48 24 48z" />
+              </svg>
+
+              Continue with Google
             </button>
           </form>
         </div>

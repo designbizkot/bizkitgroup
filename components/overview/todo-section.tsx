@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { Check, MoreVertical } from "lucide-react"
+import { Check, MoreVertical, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Modal } from "@/components/modal"
 
@@ -29,6 +29,11 @@ const TAG_OPTIONS = [
 
 export function TodoSection() {
   const [todos, setTodos] = useState<TodoItem[]>([])
+  const getTodayDate = () =>
+    new Date().toISOString().split("T")[0]
+  const handleDelete = (id: string) => {
+    setDeleteId(id)
+  }
   const [isAdding, setIsAdding] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -41,24 +46,28 @@ export function TodoSection() {
   const [newTag, setNewTag] = useState(TAG_OPTIONS[0])
   const [newDueDate, setNewDueDate] = useState("")
 
-
   const titleInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-  const fetchTodos = async () => {
-    const res = await fetch("/api/todos")
-
-    if (!res.ok) {
-      console.error("Failed to fetch todos")
-      return
+    const fetchTodos = async () => {
+      const res = await fetch("/api/todos")
+      if (!res.ok) return
+      const data = await res.json()
+      setTodos(data as TodoItem[])
     }
+    fetchTodos()
+  }, [])
 
-    const data = await res.json()
-    setTodos(data as TodoItem[])
+  // ✅ เปิด Add modal พร้อม default date = today
+  const openAddModal = () => {
+    setEditingId(null)
+    setOriginalTodo(null)
+    setNewTitle("")
+    setNewAssignee("")
+    setNewTag(TAG_OPTIONS[0])
+    setNewDueDate(getTodayDate()) // ⭐ default วันนี้
+    setIsAdding(true)
   }
-
-  fetchTodos()
-}, [])
 
   const isFormValid =
     newTitle.trim() !== "" &&
@@ -97,7 +106,6 @@ export function TodoSection() {
           creatorAvatar: "/images/avatar.jpg",
           dueDate: newDueDate,
           done: false,
-
         }
 
         await fetch("/api/todos", {
@@ -109,9 +117,7 @@ export function TodoSection() {
 
       const res = await fetch("/api/todos")
       const data = await res.json()
-      setTodos(data)
-      if (data) setTodos(data as TodoItem[])
-
+      setTodos(data as TodoItem[])
     } catch (error) {
       console.error("Error saving:", error)
     }
@@ -132,7 +138,7 @@ export function TodoSection() {
 
     const res = await fetch("/api/todos")
     const data = await res.json()
-    if (data) setTodos(data as TodoItem[])
+    setTodos(data as TodoItem[])
   }
 
   const handleEdit = (todo: TodoItem) => {
@@ -145,10 +151,6 @@ export function TodoSection() {
       TAG_OPTIONS.find((t) => t.label === todo.tag) || TAG_OPTIONS[0]
     )
     setIsAdding(true)
-  }
-
-  const handleDelete = (id: string) => {
-    setDeleteId(id)
   }
 
   const confirmDelete = async () => {
@@ -164,7 +166,7 @@ export function TodoSection() {
 
     const res = await fetch("/api/todos")
     const data = await res.json()
-    if (data) setTodos(data as TodoItem[])
+    setTodos(data as TodoItem[])
   }
 
   const resetForm = () => {
@@ -177,6 +179,13 @@ export function TodoSection() {
     setIsAdding(false)
   }
 
+  useEffect(() => {
+    const handleClick = () => setOpenMenuId(null)
+    window.addEventListener("click", handleClick)
+    return () =>
+      window.removeEventListener("click", handleClick)
+  }, [])
+  
   const activeCount = todos.filter((t) => !t.done).length
 
   const hasChanges =
@@ -202,10 +211,11 @@ export function TodoSection() {
 
         {todos.length > 0 && (
           <button
-            onClick={() => setIsAdding(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white shadow-sm hover:opacity-90 transition"
+            onClick={openAddModal}
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1F6F78] text-white hover:opacity-90"
+            aria-label="Add follow up"
           >
-            +
+            <Plus size={20} />
           </button>
         )}
       </div>
@@ -330,7 +340,7 @@ export function TodoSection() {
             </p>
 
             <button
-              onClick={() => setIsAdding(true)}
+              onClick={openAddModal}
               className="mt-6 rounded-md bg-primary px-6 py-2 text-white"
             >
               + Add task

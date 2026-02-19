@@ -6,9 +6,9 @@ import { FollowUpSection } from "@/components/overview/follow-up-section"
 
 export function OverviewDashboard() {
   return (
-    <div className="flex flex-col gap-5 xl:flex-row">
+    <div className="flex flex-col gap-5 xl:flex-row xl:h-screen xl:items-stretch">
       {/* Left + Center columns */}
-      <div className="flex flex-1 flex-col gap-5">
+      <div className="flex flex-1 flex-col gap-5 xl:h-full">
         <div className="flex flex-col items-stretch gap-5 md:h-[420px] md:flex-row">
           {/* To do */}
           <div className="min-h-[350px] flex-1 md:min-h-0">
@@ -21,15 +21,15 @@ export function OverviewDashboard() {
         </div>
 
         {/* Project timeline */}
-        <ProjectTimeline />
+        <div className="flex-1 min-h-0">
+          <ProjectTimeline />
+        </div>
       </div>
 
       {/* Right column */}
-      <div className="flex w-full flex-col gap-5 md:flex-row xl:w-72 xl:shrink-0 xl:flex-col">
-        <div className="flex-1 xl:flex-none">
-          <UpcomingEvents />
-        </div>
-        <div className="flex-1 xl:flex-none">
+      <div className="w-full xl:w-96 flex flex-col gap-5 xl:h-full xl:flex-none">
+        <UpcomingEvents />
+        <div className="flex-1 min-h-0">
           <FollowUpSection />
         </div>
       </div>
