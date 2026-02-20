@@ -123,6 +123,8 @@ export default function SalesDashboard() {
     const [filterFollowFrom, setFilterFollowFrom] = useState("")
     const [filterFollowTo, setFilterFollowTo] = useState("")
     const [filterCountry, setFilterCountry] = useState("")
+    const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
+const [currentUserAvatar, setCurrentUserAvatar] = useState<string | null>(null)
 
 
     /* Form state */

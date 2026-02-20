@@ -100,6 +100,8 @@ export function ClientsTable() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [viewingClient, setViewingClient] = useState<Client | null>(null)
   const [originalClient, setOriginalClient] = useState<Client | null>(null)
+  const [editAvatarFile, setEditAvatarFile] = useState<File | null>(null)
+  const [editAvatarPreview, setEditAvatarPreview] = useState<string | null>(null)
 
   /* ---- Add modal state ---- */
   const [isAdding, setIsAdding] = useState(false)
@@ -176,7 +178,7 @@ export function ClientsTable() {
             c.avatar ||
             (googleAvatar && c.email === currentEmail
               ? googleAvatar
-              : "/placeholder.svg"),
+              : ""),
           online: false,
         }))
 
@@ -192,7 +194,7 @@ export function ClientsTable() {
     const filePath = `${clientId}.${fileExt}`
 
     const { error } = await supabase.storage
-      .from("avatars")
+      .from("client-avatars")
       .upload(filePath, file, { upsert: true })
 
     if (error) {
@@ -201,7 +203,7 @@ export function ClientsTable() {
     }
 
     const { data } = supabase.storage
-      .from("avatars")
+      .from("client-avatars")
       .getPublicUrl(filePath)
 
     return data.publicUrl
@@ -282,7 +284,7 @@ export function ClientsTable() {
     setNewIndustry(INDUSTRY_OPTIONS[0]); setNewSource(SOURCE_OPTIONS[0])
     setNewCity(""); setNewCountry(""); setNewPhone(""); setNewLinkedin("")
     setNewBillingName(""); setNewBillingEmail(""); setNewBillingAbn("")
-    setIsAdding(false)
+    setIsAdding(false); setNewAvatarFile(null)
   }
 
   const handleAddClient = async () => {
@@ -331,18 +333,18 @@ export function ClientsTable() {
     }
 
     const formatted = {
-  ...data,
-  companyWebsite: data.company_website,
-  billingName: data.billing_name,
-  billingEmail: data.billing_email,
-  billingAbn: data.billing_abn,
-  industryColor: INDUSTRY_COLORS[data.industry] ?? "",
-  sourceColor: SOURCE_COLORS[data.source] ?? "",
-  companyLogo: data.company?.charAt(0)?.toUpperCase() ?? "C",
-  companyLogoColor: "bg-[#166a7d]",
-  avatar: avatarUrl, 
-  online: false,
-}
+      ...data,
+      companyWebsite: data.company_website,
+      billingName: data.billing_name,
+      billingEmail: data.billing_email,
+      billingAbn: data.billing_abn,
+      industryColor: INDUSTRY_COLORS[data.industry] ?? "",
+      sourceColor: SOURCE_COLORS[data.source] ?? "",
+      companyLogo: data.company?.charAt(0)?.toUpperCase() ?? "C",
+      companyLogoColor: "bg-[#166a7d]",
+      avatar: avatarUrl,
+      online: false,
+    }
 
     setClients((prev) => [formatted, ...prev])
     resetAddForm()
@@ -352,22 +354,49 @@ export function ClientsTable() {
   const openEditModal = (client: Client) => {
     setEditingClient(client)
     setOriginalClient(client)
-    setEditName(client.name); setEditEmail(client.email)
-    setEditCompany(client.company); setEditCompanyWebsite(client.companyWebsite)
-    setEditIndustry(client.industry); setEditSource(client.source)
-    setEditCity(client.city); setEditCountry(client.country)
-    setEditPhone(client.phone); setEditLinkedin(client.linkedin)
-    setEditBillingName(client.billingName); setEditBillingEmail(client.billingEmail)
+
+    setEditName(client.name)
+    setEditEmail(client.email)
+    setEditCompany(client.company)
+    setEditCompanyWebsite(client.companyWebsite)
+    setEditIndustry(client.industry)
+    setEditSource(client.source)
+    setEditCity(client.city)
+    setEditCountry(client.country)
+    setEditPhone(client.phone)
+    setEditLinkedin(client.linkedin)
+    setEditBillingName(client.billingName)
+    setEditBillingEmail(client.billingEmail)
     setEditBillingAbn(client.billingAbn)
+
+    setEditAvatarFile(null)
+    setEditAvatarPreview(client.avatar)
   }
 
   const resetEditForm = () => {
     setEditingClient(null)
     setOriginalClient(null)
+    setEditAvatarFile(null)
+    setEditAvatarPreview(null)
   }
 
   const handleEditClient = async () => {
     if (!editingClient) return
+
+    let avatarUrl: string | null = editingClient.avatar
+
+    // 1️⃣ ถ้ามีไฟล์ใหม่ → upload
+    if (editAvatarFile) {
+      const uploadedUrl = await uploadAvatar(editAvatarFile, editingClient.id)
+      if (uploadedUrl) {
+        avatarUrl = uploadedUrl
+      }
+    }
+
+    // 2️⃣ ถ้าผู้ใช้ลบรูป (preview เป็น null)
+    if (!editAvatarPreview) {
+      avatarUrl = null
+    }
 
     const { data, error } = await supabase
       .from("clients")
@@ -385,16 +414,18 @@ export function ClientsTable() {
         billing_name: editBillingName,
         billing_email: editBillingEmail,
         billing_abn: editBillingAbn,
+        avatar: avatarUrl,
       })
       .eq("id", editingClient.id)
       .select()
       .single()
 
     if (error) {
-      console.error(error)
+      console.error("Edit client error:", error)
       return
     }
 
+    // 3️⃣ แปลงข้อมูลให้ format เหมือนตอน fetch
     const formatted = {
       ...data,
       companyWebsite: data.company_website,
@@ -405,10 +436,11 @@ export function ClientsTable() {
       sourceColor: SOURCE_COLORS[data.source] ?? "",
       companyLogo: data.company?.charAt(0)?.toUpperCase() ?? "C",
       companyLogoColor: "bg-[#166a7d]",
-      avatar: editingClient.avatar,
+      avatar: avatarUrl || "",
       online: false,
     }
 
+    // 4️⃣ อัปเดต state หน้า table
     setClients((prev) =>
       prev.map((c) => (c.id === data.id ? formatted : c))
     )
@@ -611,7 +643,9 @@ export function ClientsTable() {
     editLinkedin !== originalClient.linkedin ||
     editBillingName !== originalClient.billingName ||
     editBillingEmail !== originalClient.billingEmail ||
-    editBillingAbn !== originalClient.billingAbn
+    editBillingAbn !== originalClient.billingAbn ||
+    editAvatarFile !== null ||
+  editAvatarPreview !== originalClient.avatar
   )
 
   const currentClientData = {
@@ -647,11 +681,17 @@ export function ClientsTable() {
           <div className="flex flex-col gap-4 border-b border-border p-4 sm:flex-row sm:items-start sm:justify-between sm:p-6">
             <div className="flex items-center gap-4">
               <div className="relative">
-                <img
-                  src={viewingClient.avatar || "/placeholder.svg"}
-                  alt={viewingClient.name}
-                  className="h-16 w-16 rounded-full object-cover"
-                />
+                {viewingClient.avatar ? (
+                  <img
+                    src={viewingClient.avatar}
+                    alt={viewingClient.name}
+                    className="h-16 w-16 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="h-16 w-16 rounded-full bg-gray-200 flex items-center justify-center text-lg font-semibold">
+                    {viewingClient.name.charAt(0)}
+                  </div>
+                )}
                 {viewingClient.online && (
                   <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-card bg-[#39ffb3]" />
                 )}
@@ -780,62 +820,7 @@ export function ClientsTable() {
           </div>
         </div>
 
-        {/* Edit modal from detail view */}
-        <Modal open={!!editingClient} onClose={resetEditForm} title="Edit Client" size="lg">
-          
-        
-          <div className="mb-4 flex flex-col items-center gap-3">
-            <img
-              src={editingClient?.avatar || "/placeholder.svg"}
-              className="h-20 w-20 rounded-full object-cover"
-            />
 
-            <input
-              type="file"
-              accept="image/*"
-              onChange={async (e) => {
-                const file = e.target.files?.[0]
-                if (!file || !editingClient) return
-
-                const uploadedUrl = await uploadAvatar(file, editingClient.id)
-                if (!uploadedUrl) return
-
-                await supabase
-                  .from("clients")
-                  .update({ avatar: uploadedUrl })
-                  .eq("id", editingClient.id)
-
-                setEditingClient({ ...editingClient, avatar: uploadedUrl })
-
-                setClients((prev) =>
-                  prev.map((c) =>
-                    c.id === editingClient.id
-                      ? { ...c, avatar: uploadedUrl }
-                      : c
-                  )
-                )
-              }}
-              className="text-sm"
-            />
-          </div>
-          {editingClient && renderFormFields(editValues, editSetters)}
-          <div className="flex items-center gap-3 pt-4">
-            <button onClick={resetEditForm} className="flex-1 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted">Cancel</button>
-            <button
-              onClick={() => {
-                handleEditClient()
-                const updated = clients.find((c) => c.id === editingClient?.id)
-                if (updated) setViewingClient(updated)
-              }}
-              disabled={
-                !editName.trim() ||
-                !editEmail.trim() ||
-                !isChanged
-              }
-              className="flex-1 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-[#D0E1E5] disabled:text-white disabled:opacity-100"
-            >Save Changes</button>
-          </div>
-        </Modal>
 
         {/* Delete modal from detail view */}
         <Modal open={!!deletingClient} onClose={() => setDeletingClient(null)} title="Delete Client">
@@ -934,7 +919,17 @@ export function ClientsTable() {
                   <td className="px-3 py-4">
                     <div className="flex items-center gap-3">
                       <div className="relative">
-                        <img src={client.avatar || "/placeholder.svg"} alt={client.name} className="h-10 w-10 rounded-full object-cover" />
+                        {client.avatar ? (
+                          <img
+                            src={client.avatar}
+                            alt={client.name}
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded-full bg-gray-200 flex items-center justify-center text-xs font-semibold">
+                            {client.name.charAt(0)}
+                          </div>
+                        )}
                         {client.online && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-card bg-[#39ffb3]" />}
                       </div>
                       <div>
@@ -1142,50 +1137,200 @@ export function ClientsTable() {
 
       {/* Add Client Modal */}
       <Modal open={isAdding} onClose={resetAddForm} title="New Client" size="lg">
-        <div className="mb-4 flex flex-col items-center gap-3">
-          <img
-            src={
-              newAvatarFile
-                ? URL.createObjectURL(newAvatarFile)
-                : "/placeholder.svg"
-            }
-            className="h-20 w-20 rounded-full object-cover"
-          />
+        <div className="w-full">
+          {/* Upload Profile Card */}
+          <div className="rounded-2xl border border-dashed border-border/70 bg-muted/10 p-6 transition-all duration-200 hover:border-primary/50 hover:bg-muted/20">
+            <label className="cursor-pointer block">
+              <div className="flex items-center gap-4">
+                <div className="relative h-20 w-20 flex-shrink-0">
+                  <div
+                    className="
+                flex h-full w-full items-center justify-center
+                rounded-full
+                border border-dashed border-primary/60
+                bg-primary/10
+                overflow-hidden
+                transition-all duration-200
+                hover:bg-primary/20
+              "
+                  >
+                    {newAvatarFile ? (
+                      <img
+                        src={URL.createObjectURL(newAvatarFile)}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Plus size={22} className="text-primary" />
+                    )}
+                  </div>
 
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) setNewAvatarFile(file)
-            }}
-            className="text-sm"
-          />
-        </div>
-        {renderFormFields(addValues, addSetters)}
-        <div className="flex items-center gap-3 pt-4">
-          <button onClick={resetAddForm} className="flex-1 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted">Cancel</button>
-          <button onClick={handleAddClient} disabled={!newName.trim() || !newEmail.trim()} className="flex-1 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-[#D0E1E5] disabled:text-white disabled:opacity-100">Add Client</button>
+                  {newAvatarFile && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        setNewAvatarFile(null)
+                      }}
+                      className="absolute -top-2 -right-2 rounded-full bg-white shadow-md p-1 hover:bg-red-50 transition"
+                    >
+                      <Trash2 size={14} className="text-red-500" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex flex-col">
+                  <p className="text-sm font-medium text-foreground">
+                    Upload photo
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    PNG or JPEG
+                  </p>
+                </div>
+              </div>
+
+              <input
+                type="file"
+                accept="image/png, image/jpeg"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  setNewAvatarFile(file)
+                }}
+              />
+            </label>
+          </div>
+
+          {/* Form */}
+          <div className="mt-6">
+            {renderFormFields(addValues, addSetters)}
+          </div>
+
+          <div className="flex items-center gap-3 pt-6">
+            <button
+              onClick={resetAddForm}
+              className="flex-1 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted"
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={handleAddClient}
+              disabled={!newName.trim() || !newEmail.trim()}
+              className="flex-1 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-[#D0E1E5] disabled:text-white disabled:opacity-100"
+            >
+              Add Client
+            </button>
+          </div>
         </div>
       </Modal>
 
+
       {/* Edit Client Modal */}
-      <Modal open={!!editingClient} onClose={resetEditForm} title="Edit Client" size="lg">
-        {editingClient && renderFormFields(editValues, editSetters)}
-        <div className="flex items-center gap-3 pt-4">
-          <button onClick={resetEditForm} className="flex-1 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted">Cancel</button>
-          <button
-            onClick={handleEditClient}
-            disabled={
-              !editName.trim() ||
-              !editEmail.trim() ||
-              !isChanged
-            }
-            className="flex-1 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-[#D0E1E5] disabled:text-white disabled:opacity-100"
-          >
-            Save Changes
-          </button>
-        </div>
+      <Modal
+        open={!!editingClient}
+        onClose={resetEditForm}
+        title="Edit Client"
+        size="lg"
+      >
+        {editingClient && (
+          <div className="space-y-6">
+
+            {/* 🔵 Upload Avatar Section */}
+            <div className="rounded-2xl border border-dashed border-border/70 bg-muted/10 p-6 transition hover:border-primary/50 hover:bg-muted/20">
+
+              <label className="cursor-pointer block">
+                <div className="flex items-center gap-4">
+
+                  {/* Avatar Preview */}
+                  <div className="relative h-20 w-20 flex-shrink-0">
+
+                    <div className="flex h-full w-full items-center justify-center rounded-full border border-dashed border-primary/60 bg-primary/10 overflow-hidden">
+
+                      {editAvatarPreview ? (
+                        <img
+                          src={editAvatarPreview}
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <Plus size={22} className="text-primary" />
+                      )}
+
+                    </div>
+
+                    {/* ปุ่มลบรูป */}
+                    {editAvatarPreview && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          setEditAvatarPreview(null)
+                          setEditAvatarFile(null)
+                        }}
+                        className="absolute -top-2 -right-2 rounded-full bg-white shadow-md p-1 hover:bg-red-50"
+                      >
+                        <Trash2 size={14} className="text-red-500" />
+                      </button>
+                    )}
+
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium">Change photo</p>
+                    <p className="text-xs text-muted-foreground">
+                      PNG or JPEG
+                    </p>
+                  </div>
+
+                </div>
+
+                {/* Hidden File Input */}
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+
+                    setEditAvatarFile(file)
+                    setEditAvatarPreview(URL.createObjectURL(file))
+                  }}
+                />
+              </label>
+            </div>
+
+
+            {/* 🔵 Form เดิมของคุณ */}
+            {renderFormFields(editValues, editSetters)}
+
+
+            {/* 🔵 Buttons */}
+            <div className="flex items-center gap-3 pt-4">
+
+              <button
+                onClick={resetEditForm}
+                className="flex-1 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground hover:bg-muted"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={handleEditClient}
+                disabled={
+                  !editName.trim() ||
+                  !editEmail.trim() ||
+                  !isChanged
+                }
+                className="flex-1 rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:bg-[#D0E1E5] disabled:text-white disabled:opacity-100"
+              >
+                Save Changes
+              </button>
+
+            </div>
+
+          </div>
+        )}
       </Modal>
 
       {/* Delete Confirmation Modal */}
