@@ -117,6 +117,7 @@ export function ClientsTable() {
   const [newBillingEmail, setNewBillingEmail] = useState("")
   const [newBillingAbn, setNewBillingAbn] = useState("")
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [newAvatarFile, setNewAvatarFile] = useState<File | null>(null)
 
   /* ---- Filter state ---- */
   const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -171,9 +172,10 @@ export function ClientsTable() {
           companyLogo: c.company?.charAt(0)?.toUpperCase() ?? "C",
           companyLogoColor: "bg-[#166a7d]",
           avatar:
-            googleAvatar && c.email === currentEmail
+            c.avatar ||
+            (googleAvatar && c.email === currentEmail
               ? googleAvatar
-              : "/placeholder.svg",
+              : "/placeholder.svg"),
           online: false,
         }))
 
