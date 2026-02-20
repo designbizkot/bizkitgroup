@@ -146,6 +146,7 @@ export function ClientsTable() {
   const [editBillingAbn, setEditBillingAbn] = useState("")
   const [search, setSearch] = useState("")
 
+
   const [deletingClient, setDeletingClient] = useState<Client | null>(null)
 
   useEffect(() => {
@@ -185,6 +186,26 @@ export function ClientsTable() {
 
     fetchClients()
   }, [])
+
+  const uploadAvatar = async (file: File, clientId: string) => {
+    const fileExt = file.name.split(".").pop()
+    const filePath = `${clientId}.${fileExt}`
+
+    const { error } = await supabase.storage
+      .from("avatars")
+      .upload(filePath, file, { upsert: true })
+
+    if (error) {
+      console.error("Upload error:", error)
+      return null
+    }
+
+    const { data } = supabase.storage
+      .from("avatars")
+      .getPublicUrl(filePath)
+
+    return data.publicUrl
+  }
 
   /* ---- Filtering / pagination ---- */
   const filtered = useMemo(() => {
@@ -290,24 +311,38 @@ export function ClientsTable() {
       .select()
       .single()
 
+    let avatarUrl = "/placeholder.svg"
+
+    if (newAvatarFile) {
+      const uploadedUrl = await uploadAvatar(newAvatarFile, data.id)
+      if (uploadedUrl) {
+        avatarUrl = uploadedUrl
+
+        await supabase
+          .from("clients")
+          .update({ avatar: uploadedUrl })
+          .eq("id", data.id)
+      }
+    }
+
     if (error) {
       console.error(error)
       return
     }
 
     const formatted = {
-      ...data,
-      companyWebsite: data.company_website,
-      billingName: data.billing_name,
-      billingEmail: data.billing_email,
-      billingAbn: data.billing_abn,
-      industryColor: INDUSTRY_COLORS[data.industry] ?? "",
-      sourceColor: SOURCE_COLORS[data.source] ?? "",
-      companyLogo: data.company?.charAt(0)?.toUpperCase() ?? "C",
-      companyLogoColor: "bg-[#166a7d]",
-      avatar: "/placeholder.svg",
-      online: false,
-    }
+  ...data,
+  companyWebsite: data.company_website,
+  billingName: data.billing_name,
+  billingEmail: data.billing_email,
+  billingAbn: data.billing_abn,
+  industryColor: INDUSTRY_COLORS[data.industry] ?? "",
+  sourceColor: SOURCE_COLORS[data.source] ?? "",
+  companyLogo: data.company?.charAt(0)?.toUpperCase() ?? "C",
+  companyLogoColor: "bg-[#166a7d]",
+  avatar: avatarUrl, 
+  online: false,
+}
 
     setClients((prev) => [formatted, ...prev])
     resetAddForm()
@@ -370,7 +405,7 @@ export function ClientsTable() {
       sourceColor: SOURCE_COLORS[data.source] ?? "",
       companyLogo: data.company?.charAt(0)?.toUpperCase() ?? "C",
       companyLogoColor: "bg-[#166a7d]",
-      avatar: "/placeholder.svg",
+      avatar: editingClient.avatar,
       online: false,
     }
 
@@ -747,6 +782,42 @@ export function ClientsTable() {
 
         {/* Edit modal from detail view */}
         <Modal open={!!editingClient} onClose={resetEditForm} title="Edit Client" size="lg">
+          
+        
+          <div className="mb-4 flex flex-col items-center gap-3">
+            <img
+              src={editingClient?.avatar || "/placeholder.svg"}
+              className="h-20 w-20 rounded-full object-cover"
+            />
+
+            <input
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file || !editingClient) return
+
+                const uploadedUrl = await uploadAvatar(file, editingClient.id)
+                if (!uploadedUrl) return
+
+                await supabase
+                  .from("clients")
+                  .update({ avatar: uploadedUrl })
+                  .eq("id", editingClient.id)
+
+                setEditingClient({ ...editingClient, avatar: uploadedUrl })
+
+                setClients((prev) =>
+                  prev.map((c) =>
+                    c.id === editingClient.id
+                      ? { ...c, avatar: uploadedUrl }
+                      : c
+                  )
+                )
+              }}
+              className="text-sm"
+            />
+          </div>
           {editingClient && renderFormFields(editValues, editSetters)}
           <div className="flex items-center gap-3 pt-4">
             <button onClick={resetEditForm} className="flex-1 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted">Cancel</button>
@@ -1071,6 +1142,26 @@ export function ClientsTable() {
 
       {/* Add Client Modal */}
       <Modal open={isAdding} onClose={resetAddForm} title="New Client" size="lg">
+        <div className="mb-4 flex flex-col items-center gap-3">
+          <img
+            src={
+              newAvatarFile
+                ? URL.createObjectURL(newAvatarFile)
+                : "/placeholder.svg"
+            }
+            className="h-20 w-20 rounded-full object-cover"
+          />
+
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) setNewAvatarFile(file)
+            }}
+            className="text-sm"
+          />
+        </div>
         {renderFormFields(addValues, addSetters)}
         <div className="flex items-center gap-3 pt-4">
           <button onClick={resetAddForm} className="flex-1 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted">Cancel</button>
