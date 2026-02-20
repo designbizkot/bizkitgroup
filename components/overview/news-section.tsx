@@ -131,11 +131,13 @@ export function NewsSection() {
               onClick={() => window.open(item.url, "_blank")}
             >
               <div className="flex items-start gap-4">
-                <img
-                  src={item.image}
-                  alt={item.title}
-                  className="h-[72px] w-[100px] rounded-lg object-cover"
-                />
+                {item.image && (
+                  <img
+                    src={item.image}
+                    alt={item.title}
+                    className="h-[72px] w-[100px] rounded-lg object-cover"
+                  />
+                )}
                 <div>
                   <p className="text-sm font-semibold">
                     {item.title}
@@ -211,8 +213,8 @@ export function NewsSection() {
               onClick={addNews}
               disabled={!url.trim()}
               className={`flex-1 rounded-md px-4 py-2 text-white ${url.trim()
-                  ? "bg-primary"
-                  : "bg-gray-300 cursor-not-allowed"
+                ? "bg-primary"
+                : "bg-gray-300 cursor-not-allowed"
                 }`}
             >
               Add

@@ -155,6 +155,11 @@ export function ClientsTable() {
         .order("created_at", { ascending: false })
 
       if (!error && data) {
+        const { data: userData } = await supabase.auth.getUser()
+        const currentUser = userData.user
+        const googleAvatar = currentUser?.user_metadata?.avatar_url
+        const currentEmail = currentUser?.email
+
         const formatted = data.map((c) => ({
           ...c,
           companyWebsite: c.company_website,
@@ -165,7 +170,10 @@ export function ClientsTable() {
           sourceColor: SOURCE_COLORS[c.source] ?? "",
           companyLogo: c.company?.charAt(0)?.toUpperCase() ?? "C",
           companyLogoColor: "bg-[#166a7d]",
-          avatar: "/placeholder.svg",
+          avatar:
+            googleAvatar && c.email === currentEmail
+              ? googleAvatar
+              : "/placeholder.svg",
           online: false,
         }))
 

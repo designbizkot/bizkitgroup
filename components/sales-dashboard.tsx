@@ -14,11 +14,13 @@ import {
     FileText,
     MessageSquare,
     MoreVertical,
+    Trash2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Modal } from "@/components/modal"
 import { useRouter } from "next/navigation"
 import { SalesKanban } from "@/components/SalesKanban"
+import { supabase } from "@/lib/supabase-client"
 
 
 /* ── Types ─── */
@@ -37,6 +39,7 @@ interface Lead {
     followUp: string
     created: string
     active: boolean
+    linkedinUrl?: string
 }
 
 /* ── Color maps ─── */
@@ -67,9 +70,6 @@ const STATUS_COLORS: Record<string, string> = {
     "Closed": "bg-[#d4d4d8] text-[#27272a]",
 }
 
-
-const INDUSTRY_OPTIONS = ["Technology", "Finance", "Retail", "Education", "Logistics", "Advertising"]
-const SOURCE_OPTIONS = ["LinkedIn", "Website", "Referral"]
 const STATUS_OPTIONS = [
     "New",
     "Reached Out",
@@ -110,6 +110,10 @@ export default function SalesDashboard() {
     const [deleteLead, setDeleteLead] = useState<Lead | null>(null)
     const [originalLead, setOriginalLead] = useState<Lead | null>(null)
     const [editingId, setEditingId] = useState<string | null>(null)
+    const [fLinkedinUrl, setFLinkedinUrl] = useState("")
+    const [fAvatarFile, setFAvatarFile] = useState<File | null>(null)
+    const [fAvatarPreview, setFAvatarPreview] = useState<string | null>(null)
+    const [selectedIds, setSelectedIds] = useState<string[]>([])
 
     /* Filter state */
     const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -125,16 +129,21 @@ export default function SalesDashboard() {
     const [fName, setFName] = useState("")
     const [fEmail, setFEmail] = useState("")
     const [fCompany, setFCompany] = useState("")
-    const [fIndustry, setFIndustry] = useState(INDUSTRY_OPTIONS[0])
-    const [fSource, setFSource] = useState(SOURCE_OPTIONS[0])
+    const [fIndustry, setFIndustry] = useState("")
+    const [fSource, setFSource] = useState("")
     const [fStatus, setFStatus] = useState(STATUS_OPTIONS[0])
     const [fFollowUp, setFFollowUp] = useState("")
 
     const resetForm = () => {
         setFName(""); setFEmail(""); setFCompany("")
-        setFIndustry(INDUSTRY_OPTIONS[0]); setFSource(SOURCE_OPTIONS[0])
+        setFIndustry(""); setFSource("");
         setFStatus(STATUS_OPTIONS[0]); setFFollowUp("")
         setIsAdding(false)
+        setFLinkedinUrl("")
+        setFAvatarFile(null)
+        setFAvatarPreview(null)
+        setEditingId(null)
+        setOriginalLead(null)
     }
 
     const handleStatusChange = async (id: string, newStatus: string) => {
@@ -151,6 +160,28 @@ export default function SalesDashboard() {
     const handleAddLead = async () => {
         if (!fName.trim() || !fEmail.trim()) return
 
+        let avatarUrl = null
+
+        if (fAvatarFile) {
+            const fileExt = fAvatarFile.name.split(".").pop()
+            const fileName = `${Date.now()}.${fileExt}`
+
+            const { data, error } = await supabase.storage
+                .from("lead-avatars")
+                .upload(fileName, fAvatarFile)
+
+            if (error) {
+                console.error("Upload error:", error)
+                return
+            }
+
+            const { data: publicUrlData } = supabase.storage
+                .from("lead-avatars")
+                .getPublicUrl(fileName)
+
+            avatarUrl = publicUrlData.publicUrl
+        }
+
         const res = await fetch("/api/leads", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -162,6 +193,8 @@ export default function SalesDashboard() {
                 source: fSource,
                 status: fStatus,
                 follow_up: fFollowUp || null,
+                linkedin_url: fLinkedinUrl || null,
+                avatar_url: avatarUrl,
             }),
         })
 
@@ -177,6 +210,32 @@ export default function SalesDashboard() {
     const handleUpdateLead = async () => {
         if (!editingId) return
 
+        let avatarUrl = originalLead?.avatar || null
+
+        // ✅ ถ้ามีการเลือกไฟล์ใหม่
+        if (fAvatarFile) {
+            const fileExt = fAvatarFile.name.split(".").pop()
+            const fileName = `${Date.now()}.${fileExt}`
+
+            // อัปโหลดเข้า Supabase storage
+            const { error } = await supabase.storage
+                .from("lead-avatars")
+                .upload(fileName, fAvatarFile)
+
+            if (error) {
+                console.error("Upload error:", error)
+                return
+            }
+
+            // ดึง public URL
+            const { data } = supabase.storage
+                .from("lead-avatars")
+                .getPublicUrl(fileName)
+
+            avatarUrl = data.publicUrl
+        }
+
+        // ✅ ส่ง avatar_url ไป API ด้วย
         const res = await fetch("/api/leads", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -189,6 +248,8 @@ export default function SalesDashboard() {
                 source: fSource,
                 status: fStatus,
                 follow_up: fFollowUp || null,
+                linkedin_url: fLinkedinUrl || null,
+                avatar_url: avatarUrl,   // 👈 ต้องมีบรรทัดนี้
             }),
         })
 
@@ -199,7 +260,6 @@ export default function SalesDashboard() {
 
         await fetchLeads()
         resetForm()
-        setEditingId(null)
     }
 
     const handleDeleteLead = async (id: string) => {
@@ -223,6 +283,29 @@ export default function SalesDashboard() {
         return () => {
             window.removeEventListener("click", handleClick)
         }
+    }, [])
+
+    useEffect(() => {
+        const getUser = async () => {
+            const { data } = await supabase.auth.getUser()
+
+            const user = data.user
+
+            if (!user) return
+
+            setCurrentUserEmail(user.email ?? null)
+
+            // ถ้า login ด้วย Google จะมี avatar_url
+            const avatarFromGoogle = user.user_metadata?.avatar_url
+
+            if (avatarFromGoogle) {
+                setCurrentUserAvatar(avatarFromGoogle)
+            } else {
+                setCurrentUserAvatar(null)
+            }
+        }
+
+        getUser()
     }, [])
 
     /* Filtering */
@@ -274,12 +357,6 @@ export default function SalesDashboard() {
             })
         }
 
-        if (filterFollowTo) {
-            list = list.filter((l) => {
-                if (l.followUp === "-") return false
-                return new Date(l.followUp) <= new Date(filterFollowTo)
-            })
-        }
 
         return list
     }, [
@@ -339,7 +416,12 @@ export default function SalesDashboard() {
             return (
                 fName.trim() !== "" ||
                 fEmail.trim() !== "" ||
-                fCompany.trim() !== ""
+                fCompany.trim() !== "" ||
+                fIndustry.trim() !== "" ||
+                fSource.trim() !== "" ||
+                fFollowUp !== "" ||
+                fLinkedinUrl.trim() !== "" ||
+                fAvatarFile !== null
             )
         }
 
@@ -352,7 +434,10 @@ export default function SalesDashboard() {
             fCompany !== originalLead.company ||
             fIndustry !== originalLead.industry ||
             fSource !== originalLead.source ||
-            fStatus !== originalLead.status
+            fStatus !== originalLead.status ||
+            fFollowUp !== (originalLead.followUp || "") ||
+            fLinkedinUrl !== (originalLead.linkedinUrl || "") ||
+            fAvatarFile !== null
         )
     }, [
         fName,
@@ -361,8 +446,11 @@ export default function SalesDashboard() {
         fIndustry,
         fSource,
         fStatus,
+        fFollowUp,
+        fLinkedinUrl,
         editingId,
         originalLead,
+        fAvatarFile,
     ])
 
     useEffect(() => {
@@ -383,7 +471,7 @@ export default function SalesDashboard() {
             id: item.id,
             name: item.name,
             email: item.email,
-            avatar: "/placeholder.svg",
+            avatar: item.avatar_url || null,
             online: true,
             company: item.company || "-",
             companyLogo: item.company?.[0]?.toUpperCase() || "?",
@@ -398,10 +486,37 @@ export default function SalesDashboard() {
                 year: "numeric",
             }),
             active: true,
+            linkedinUrl: item.linkedin_url || "",
         }))
 
         setLeads(formatted)
     }
+
+    const renderLeadAvatar = (lead: Lead) => {
+        if (lead.avatar) {
+            return (
+                <img
+                    src={lead.avatar}
+                    alt={lead.name}
+                    className="h-10 w-10 rounded-full object-cover"
+                />
+            )
+        }
+
+        const initials = lead.name
+            .split(" ")
+            .map((n) => n[0])
+            .join("")
+            .substring(0, 2)
+            .toUpperCase()
+
+        return (
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-sm font-semibold text-white">
+                {initials}
+            </div>
+        )
+    }
+
 
     return (
         <div>
@@ -469,13 +584,13 @@ export default function SalesDashboard() {
                                 </button>
                             )}
                         </div>
-                        <button
+                        {/* <button
                             onClick={() => setIsFilterOpen(true)}
                             className="relative flex items-center gap-2 rounded-lg border border-primary px-4 py-2 text-sm font-medium text-primary transition-colors hover:bg-primary/10"
                         >
                             <SlidersHorizontal size={16} />
                             <span className="hidden sm:inline">Filters</span>
-                        </button>
+                        </button> */}
 
                         <div className="flex items-center rounded-xl bg-[#F0F0F0] border border-border/60 bg-muted/30 p-1 shadow-sm">
                             <button
@@ -518,33 +633,70 @@ export default function SalesDashboard() {
                     <div className="flex flex-col gap-5">
 
                         {/* Industry */}
-                        <div>
+                        <div className="flex-1">
                             <label className={labelCls}>Industry</label>
-                            <select
-                                value={filterIndustry}
-                                onChange={(e) => setFilterIndustry(e.target.value)}
-                                className={selectCls}
-                            >
-                                <option value="">All Industries</option>
-                                {INDUSTRY_OPTIONS.map((o) => (
-                                    <option key={o} value={o}>{o}</option>
-                                ))}
-                            </select>
+                            <input
+                                type="text"
+                                value={fIndustry}
+                                onChange={(e) => setFIndustry(e.target.value)}
+                                placeholder="e.g. Technology"
+                                className={inputCls}
+                            />
                         </div>
 
                         {/* Source */}
-                        <div>
-                            <label className={labelCls}>Source</label>
-                            <select
-                                value={filterSource}
-                                onChange={(e) => setFilterSource(e.target.value)}
-                                className={selectCls}
-                            >
-                                <option value="">All Sources</option>
-                                {SOURCE_OPTIONS.map((o) => (
-                                    <option key={o} value={o}>{o}</option>
-                                ))}
-                            </select>
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                            <div className="flex-1">
+                                <label className={labelCls}>Source</label>
+                                <input
+                                    type="text"
+                                    value={fSource}
+                                    onChange={(e) => setFSource(e.target.value)}
+                                    placeholder="e.g. LinkedIn"
+                                    className={inputCls}
+                                />
+                            </div>
+
+                            <div className="flex-1">
+                                <label className={labelCls}>LinkedIn Profile URL</label>
+                                <input
+                                    type="url"
+                                    value={fLinkedinUrl}
+                                    onChange={(e) => setFLinkedinUrl(e.target.value)}
+                                    placeholder="https://linkedin.com/in/johndoe"
+                                    className={inputCls}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                            <div className="flex-1">
+                                <label className={labelCls}>Status</label>
+                                <select
+                                    value={fStatus}
+                                    onChange={(e) => setFStatus(e.target.value)}
+                                    className={selectCls}
+                                >
+                                    {STATUS_OPTIONS.map((o) => (
+                                        <option key={o} value={o}>{o}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3 sm:flex-row">
+                            <div className="flex-1">
+                                <label className={labelCls}>Status</label>
+                                <select
+                                    value={fStatus}
+                                    onChange={(e) => setFStatus(e.target.value)}
+                                    className={selectCls}
+                                >
+                                    {STATUS_OPTIONS.map((o) => (
+                                        <option key={o} value={o}>{o}</option>
+                                    ))}
+                                </select>
+                            </div>
                         </div>
 
                         {/* Country */}
@@ -611,7 +763,21 @@ export default function SalesDashboard() {
                         <table className="w-full border-collapse border-0">
                             <thead className="bg-muted/40">
                                 <tr className="text-left">
-                                    <th className="py-3 pl-5 pr-2 font-normal"><input type="checkbox" className="h-4 w-4 rounded border-border accent-primary" /></th>
+                                    <th className="py-3 pl-5 pr-2 font-normal"><input
+                                        type="checkbox"
+                                        className="h-4 w-4 rounded border-border accent-primary"
+                                        checked={
+                                            paginated.length > 0 &&
+                                            selectedIds.length === paginated.length
+                                        }
+                                        onChange={(e) => {
+                                            if (e.target.checked) {
+                                                setSelectedIds(paginated.map((lead) => lead.id))
+                                            } else {
+                                                setSelectedIds([])
+                                            }
+                                        }}
+                                    /></th>
                                     <th className="px-3 py-3 text-xs font-medium text-muted-foreground">Name</th>
                                     <th className="px-3 py-3 text-xs font-medium text-muted-foreground">Company</th>
                                     <th className="px-3 py-3 text-xs font-medium text-muted-foreground">Industry</th>
@@ -626,12 +792,25 @@ export default function SalesDashboard() {
                                 {paginated.map((lead) => (
                                     <tr key={lead.id} className="transition-all duration-200 hover:bg-muted/40">
                                         <td className="py-4 pl-5 pr-2">
-                                            <input type="checkbox" className="h-4 w-4 rounded border-border accent-primary" />
+                                            <input
+                                                type="checkbox"
+                                                className="h-4 w-4 rounded border-border accent-primary"
+                                                checked={selectedIds.includes(lead.id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setSelectedIds([...selectedIds, lead.id])
+                                                    } else {
+                                                        setSelectedIds(
+                                                            selectedIds.filter((id) => id !== lead.id)
+                                                        )
+                                                    }
+                                                }}
+                                            />
                                         </td>
                                         <td className="px-3 py-4">
                                             <div className="flex items-center gap-3">
                                                 <div className="relative">
-                                                    <img src={lead.avatar} alt={lead.name} className="h-10 w-10 rounded-full object-cover" />
+                                                    {renderLeadAvatar(lead)}
                                                     {lead.online && <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-card bg-[#39ffb3]" />}
                                                 </div>
                                                 <div>
@@ -695,8 +874,11 @@ export default function SalesDashboard() {
 
                                                             setEditingId(lead.id)
                                                             setOriginalLead(leadToEdit)
+                                                            setFAvatarPreview(leadToEdit.avatar || null)
+                                                            setFAvatarFile(null)
                                                             setIsAdding(true)
                                                             setActionMenuId(null)
+                                                            setFLinkedinUrl(leadToEdit.linkedinUrl || "")
                                                         }}
                                                         className="flex w-full items-center gap-2 px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
                                                     >
@@ -764,8 +946,75 @@ export default function SalesDashboard() {
 
             {/* Add Lead Modal */}
             <Modal open={isAdding} onClose={resetForm} title="New Lead" size="lg">
-                <div className="flex flex-col gap-5">
-                    <div className="flex flex-col gap-3">
+                {/* Upload Profile Card */}
+                <div className="w-full">
+                    <div className="rounded-2xl border border-dashed border-border/70 bg-muted/10 p-6 transition-all duration-200 hover:border-primary/50 hover:bg-muted/20">                            <label className="cursor-pointer block">
+                        {/* Avatar Upload */}
+                        <div className="flex items-center gap-4">
+                            <div className="relative h-20 w-20 flex-shrink-0">
+
+                                <div
+                                    className="
+      flex h-full w-full items-center justify-center
+      rounded-full
+      border border-dashed border-primary/60
+      bg-primary/10
+      overflow-hidden
+      transition-all duration-200
+      hover:bg-primary/20
+    "
+                                >
+                                    {fAvatarPreview ? (
+                                        <img
+                                            src={fAvatarPreview}
+                                            className="h-full w-full object-cover"
+                                        />
+                                    ) : (
+                                        <Plus size={22} className="text-primary" />
+                                    )}
+                                </div>
+
+                                {/* Delete button */}
+                                {fAvatarPreview && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setFAvatarFile(null)
+                                            setFAvatarPreview(null)
+                                        }}
+                                        className="absolute -top-2 -right-2 rounded-full bg-white shadow-md p-1 hover:bg-red-50 transition"
+                                    >
+                                        <Trash2 size={14} className="text-red-500" />
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="flex flex-col">
+                                <p className="text-sm font-medium text-[#041519]">
+                                    Upload photo
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                    PNG or JPEG
+                                </p>
+                            </div>
+                        </div>
+
+                        <input
+                            type="file"
+                            accept="image/png, image/jpeg"
+                            className="hidden"
+                            onChange={(e) => {
+                                const file = e.target.files?.[0]
+                                if (!file) return
+
+                                setFAvatarFile(file)
+                                setFAvatarPreview(URL.createObjectURL(file))
+                            }}
+                        />
+                    </label>
+                    </div>
+
+                    <div className="flex flex-col gap-6 mt-6">
                         <div className="flex flex-col gap-3 sm:flex-row">
                             <div className="flex-1">
                                 <label className={labelCls}>Full Name *</label>
@@ -783,31 +1032,63 @@ export default function SalesDashboard() {
                             </div>
                             <div className="flex-1">
                                 <label className={labelCls}>Industry</label>
-                                <select value={fIndustry} onChange={(e) => setFIndustry(e.target.value)} className={selectCls}>
-                                    {INDUSTRY_OPTIONS.map((o) => (<option key={o} value={o}>{o}</option>))}
-                                </select>
+                                <input
+                                    type="text"
+                                    value={fIndustry}
+                                    onChange={(e) => setFIndustry(e.target.value)}
+                                    placeholder="e.g. Technology"
+                                    className={inputCls}
+                                />
                             </div>
                         </div>
                         <div className="flex flex-col gap-3 sm:flex-row">
                             <div className="flex-1">
                                 <label className={labelCls}>Source</label>
-                                <select value={fSource} onChange={(e) => setFSource(e.target.value)} className={selectCls}>
-                                    {SOURCE_OPTIONS.map((o) => (<option key={o} value={o}>{o}</option>))}
-                                </select>
+                                <input
+                                    type="text"
+                                    value={fSource}
+                                    onChange={(e) => setFSource(e.target.value)}
+                                    placeholder="e.g. LinkedIn"
+                                    className={inputCls}
+                                />
                             </div>
+
+                            <div className="flex-1">
+                                <label className={labelCls}>LinkedIn Profile URL</label>
+                                <input
+                                    type="url"
+                                    value={fLinkedinUrl}
+                                    onChange={(e) => setFLinkedinUrl(e.target.value)}
+                                    placeholder="https://linkedin.com/in/username"
+                                    className={inputCls}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-3 sm:flex-row">
                             <div className="flex-1">
                                 <label className={labelCls}>Status</label>
-                                <select value={fStatus} onChange={(e) => setFStatus(e.target.value)} className={selectCls}>
-                                    {STATUS_OPTIONS.map((o) => (<option key={o} value={o}>{o}</option>))}
+                                <select
+                                    value={fStatus}
+                                    onChange={(e) => setFStatus(e.target.value)}
+                                    className={selectCls}
+                                >
+                                    {STATUS_OPTIONS.map((o) => (
+                                        <option key={o} value={o}>{o}</option>
+                                    ))}
                                 </select>
                             </div>
+                            <div>
+                                <div className="flex-1">
+                                    <label className={labelCls}>Follow Up Date</label>
+                                    <input type="date" value={fFollowUp} onChange={(e) => setFFollowUp(e.target.value)} className={inputCls} />
+                                </div>
+                            </div>
                         </div>
-                        <div>
-                            <label className={labelCls}>Follow Up Date</label>
-                            <input type="date" value={fFollowUp} onChange={(e) => setFFollowUp(e.target.value)} className={inputCls} />
-                        </div>
+
+
                     </div>
-                    <div className="flex items-center gap-3 pt-2">
+                    <div className="flex items-center gap-3 pt-4">
                         <button onClick={resetForm} className="flex-1 rounded-md border border-border bg-card px-4 py-2.5 text-sm font-medium text-card-foreground transition-colors hover:bg-muted">
                             Cancel
                         </button>
